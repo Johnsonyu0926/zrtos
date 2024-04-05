@@ -33,6 +33,11 @@
 /* Provide definition to align LVGL buffers */
 #define LV_ATTRIBUTE_MEM_ALIGN __aligned(CONFIG_LV_ATTRIBUTE_MEM_ALIGN_SIZE)
 
+#ifdef CONFIG_LV_Z_USE_OSAL
+#define LV_USE_OS            LV_OS_CUSTOM
+#define LV_OS_CUSTOM_INCLUDE "lvgl_zephyr_osal.h"
+#endif /* CONFIG_LV_Z_USE_OSAL */
+
 /*
  * Needed because of a workaround for a GCC bug,
  * see https://github.com/lvgl/lvgl/issues/3078
