@@ -227,6 +227,9 @@ Drivers and Sensors
 
 * Display
 
+  * Added API function :c:func:`display_show` and display capability :c:enum:`SCREEN_INFO_REQUIRES_SHOW`
+    for displays that allow tearing prevention of segmented updates.
+
 * Ethernet
 
   * LiteX: Renamed the ``compatible`` from ``litex,eth0`` to :dtcompatible:`litex,liteeth`.
