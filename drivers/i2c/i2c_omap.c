@@ -12,7 +12,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 #include <zephyr/drivers/i2c.h>
+
+#ifdef CONFIG_I2C_OMAP_BUS_RECOVERY
 #include "i2c_bitbang.h"
+#endif /* CONFIG_I2C_OMAP_BUS_RECOVERY */
 
 LOG_MODULE_REGISTER(omap_i2c, CONFIG_I2C_LOG_LEVEL);
 
@@ -26,8 +29,8 @@ LOG_MODULE_REGISTER(omap_i2c, CONFIG_I2C_LOG_LEVEL);
 /* I2C Registers */
 typedef struct {
 	uint8_t RESERVED_0[0x10]; /**< Reserved, offset: 0x0 */
-	__IO uint32_t SYSC;       /**< System Configuration, offset: 0x10 */
 
+	__IO uint32_t SYSC;          /**< System Configuration, offset: 0x10 */
 	uint8_t RESERVED_1[0x18];    /**< Reserved, offset: 0x14 - 0x2C */
 	__IO uint32_t IRQENABLE_SET; /**< Interrupt Enable Set, offset: 0x2C */
 	uint8_t RESERVED_2[0x4];     /**< Reserved, offset: 0x30 - 0x34 */
@@ -174,8 +177,8 @@ static int i2c_omap_reset(const struct device *dev)
 	i2c_omap_regs_t *i2c_base_addr = DEV_I2C_BASE(dev);
 	uint64_t timeout;
 	uint16_t sysc;
-	sysc = i2c_base_addr->SYSC;
 
+	sysc = i2c_base_addr->SYSC;
 	i2c_base_addr->CON &= ~I2C_OMAP_CON_EN;
 	timeout = k_uptime_get() + I2C_OMAP_TIMEOUT;
 	i2c_base_addr->CON = I2C_OMAP_CON_EN;
@@ -229,30 +232,6 @@ static int i2c_omap_set_speed(const struct device *dev, uint32_t speed)
 		return -ERANGE;
 	}
 
-	return 0;
-}
-
-/**
- * @brief Initialize the OMAP I2C controller.
- *
- * This function initializes the OMAP I2C controller by setting the speed and
- * performing any necessary initialization steps.
- *
- * @param dev Pointer to the device structure for the I2C controller.
- * @return 0 if successful, negative error code otherwise.
- */
-static int i2c_omap_init(const struct device *dev)
-{
-	struct i2c_omap_data *data = DEV_DATA(dev);
-	const struct i2c_omap_cfg *cfg = DEV_CFG(dev);
-	k_sem_init(&data->cmd_complete, 0, 1);
-
-	/* Set the speed for I2C */
-	if (i2c_omap_set_speed(dev, cfg->speed)) {
-		LOG_ERR("Failed to set speed");
-		return -ENOTSUP;
-	}
-	i2c_omap_init_ll(dev);
 	return 0;
 }
 
@@ -338,12 +317,109 @@ static void i2c_omap_resize_fifo(const struct device *dev, uint8_t size)
 	}
 }
 
+#ifdef CONFIG_I2C_OMAP_BUS_RECOVERY
+/**
+ * @brief Get the state of the SDA line.
+ *
+ * This function retrieves the state of the SDA (data) line for the OMAP I2C controller.
+ *
+ * @param io_context The I2C context.
+ * @return The state of the SDA line.
+ */
+static int i2c_omap_get_sda(void *io_context)
+{
+	const struct i2c_omap_cfg *cfg = (const struct i2c_omap_cfg *)io_context;
+	i2c_omap_regs_t *i2c_base_addr = (i2c_omap_regs_t *)cfg->base.addr;
+
+	return (i2c_base_addr->SYSTEST & I2C_OMAP_SYSTEST_SDA_I_FUNC) ? 1 : 0;
+}
+
+/**
+ * @brief Set the state of the SDA line.
+ *
+ * This function sets the state of the SDA (data) line for the OMAP I2C controller.
+ *
+ * @param io_context The I2C context.
+ * @param state The state to set (0 for low, 1 for high).
+ */
+static void i2c_omap_set_sda(void *io_context, int state)
+{
+	const struct i2c_omap_cfg *cfg = (const struct i2c_omap_cfg *)io_context;
+	i2c_omap_regs_t *i2c_base_addr = (i2c_omap_regs_t *)cfg->base.addr;
+
+	if (state) {
+		i2c_base_addr->SYSTEST |= I2C_OMAP_SYSTEST_SDA_O;
+	} else {
+		i2c_base_addr->SYSTEST &= ~I2C_OMAP_SYSTEST_SDA_O;
+	}
+}
+
+/**
+ * @brief Set the state of the SCL line.
+ *
+ * This function sets the state of the SCL (clock) line for the OMAP I2C controller.
+ *
+ * @param io_context The I2C context.
+ * @param state The state to set (0 for low, 1 for high).
+ */
+static void i2c_omap_set_scl(void *io_context, int state)
+{
+	const struct i2c_omap_cfg *cfg = (const struct i2c_omap_cfg *)io_context;
+	i2c_omap_regs_t *i2c_base_addr = (i2c_omap_regs_t *)cfg->base.addr;
+
+	if (state) {
+		i2c_base_addr->SYSTEST |= I2C_OMAP_SYSTEST_SCL_O;
+	} else {
+		i2c_base_addr->SYSTEST &= ~I2C_OMAP_SYSTEST_SCL_O;
+	}
+}
+/**
+ * @brief Recovers the I2C bus using the OMAP I2C controller.
+ *
+ * This function attempts to recover the I2C bus by performing a bus recovery
+ * sequence using the OMAP I2C controller. It uses the provided device
+ * configuration and bit-banging operations to recover the bus.
+ *
+ * @param dev Pointer to the device structure.
+ * @return 0 on success, negative error code on failure.
+ */
+
+static int i2c_omap_recover_bus(const struct device *dev)
+{
+	const struct i2c_omap_cfg *cfg = DEV_CFG(dev);
+	i2c_omap_regs_t *i2c_base_addr = DEV_I2C_BASE(dev);
+
+	struct i2c_bitbang bitbang_omap;
+	struct i2c_bitbang_io bitbang_omap_io = {
+		.get_sda = i2c_omap_get_sda,
+		.set_scl = i2c_omap_set_scl,
+		.set_sda = i2c_omap_set_sda,
+	};
+	int error = 0;
+
+	i2c_base_addr->SYSTEST |= I2C_OMAP_SYSTEST_ST_EN | (3 << I2C_OMAP_SYSTEST_TMODE_SHIFT) |
+				  I2C_OMAP_SYSTEST_SCL_O | I2C_OMAP_SYSTEST_SDA_O;
+	i2c_bitbang_init(&bitbang_omap, &bitbang_omap_io, (void *)cfg);
+	error = i2c_bitbang_recover_bus(&bitbang_omap);
+	if (error != 0) {
+		LOG_ERR("failed to recover bus (err %d)", error);
+		goto restore;
+	}
+
+restore:
+	i2c_base_addr->SYSTEST &= ~(I2C_OMAP_SYSTEST_ST_EN | I2C_OMAP_SYSTEST_TMODE_MASK |
+				    I2C_OMAP_SYSTEST_SCL_O | I2C_OMAP_SYSTEST_SDA_O);
+	return error;
+}
+#endif /* CONFIG_I2C_OMAP_BUS_RECOVERY */
+
 /**
  * @brief Wait for the bus to become free (no longer busy).
  *
  * This function waits for the bus to become free by continuously checking the
  * status register of the OMAP I2C controller. If the bus remains busy for a
- * certain timeout period, the function will return timeout error.
+ * certain timeout period, the function will return attempts to recover the bus by calling
+ * i2c_omap_recover_bus().
  *
  * @param dev The I2C device structure.
  * @return 0 if the bus becomes free, or a negative error code if the bus cannot
@@ -357,6 +433,11 @@ static int i2c_omap_wait_for_bb(const struct device *dev)
 	while (i2c_base_addr->STAT & I2C_OMAP_STAT_BB) {
 		if (k_uptime_get_32() > timeout) {
 			LOG_ERR("Bus busy timeout");
+#ifdef CONFIG_I2C_OMAP_BUS_RECOVERY
+			return i2c_omap_recover_bus(dev);
+#else
+			return -ETIMEDOUT;
+#endif /* CONFIG_I2C_OMAP_BUS_RECOVERY */
 		}
 		k_busy_wait(100);
 	}
@@ -567,8 +648,8 @@ static int i2c_omap_transfer_main(const struct device *dev, struct i2c_msg msg[]
 				  bool polling, uint16_t addr)
 {
 	int ret;
-	ret = i2c_omap_wait_for_bb(dev);
 
+	ret = i2c_omap_wait_for_bb(dev);
 	if (ret < 0) {
 		return ret;
 	}
@@ -623,7 +704,34 @@ static int __maybe_unused i2c_omap_transfer_polling(const struct device *dev, st
 static const struct i2c_driver_api i2c_omap_api = {
 	.transfer = i2c_omap_transfer_polling,
 	.configure = i2c_omap_configure,
+#ifdef CONFIG_I2C_OMAP_BUS_RECOVERY
+	.recover_bus = i2c_omap_recover_bus,
+#endif /* CONFIG_I2C_OMAP_BUS_RECOVERY */
 };
+
+/**
+ * @brief Initialize the OMAP I2C controller.
+ *
+ * This function initializes the OMAP I2C controller by setting the speed and
+ * performing any necessary initialization steps.
+ *
+ * @param dev Pointer to the device structure for the I2C controller.
+ * @return 0 if successful, negative error code otherwise.
+ */
+static int i2c_omap_init(const struct device *dev)
+{
+	struct i2c_omap_data *data = DEV_DATA(dev);
+	const struct i2c_omap_cfg *cfg = DEV_CFG(dev);
+
+	k_sem_init(&data->cmd_complete, 0, 1);
+	/* Set the speed for I2C */
+	if (i2c_omap_set_speed(dev, cfg->speed)) {
+		LOG_ERR("Failed to set speed");
+		return -ENOTSUP;
+	}
+	i2c_omap_init_ll(dev);
+	return 0;
+}
 
 #define I2C_OMAP_INIT(inst)                                                                        \
 	LOG_INSTANCE_REGISTER(omap_i2c, inst, CONFIG_I2C_LOG_LEVEL);                               \
