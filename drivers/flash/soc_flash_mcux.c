@@ -55,7 +55,7 @@ LOG_MODULE_REGISTER(flash_mcux);
 
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
 
-#if defined(CONFIG_CHECK_BEFORE_READING)  && !defined(CONFIG_SOC_LPC55S36)
+#if defined(CONFIG_CHECK_BEFORE_READING) && !defined(CONFIG_SOC_LPC55S36)
 #define FMC_STATUS_FAIL	FLASH_INT_CLR_ENABLE_FAIL_MASK
 #define FMC_STATUS_ERR	FLASH_INT_CLR_ENABLE_ERR_MASK
 #define FMC_STATUS_DONE	FLASH_INT_CLR_ENABLE_DONE_MASK
@@ -123,6 +123,9 @@ static status_t is_area_readable(uint32_t addr, size_t len)
 
 	return 0;
 }
+#else
+/* Empty forward definition */
+status_t is_area_readable(uint32_t addr, size_t len);
 #endif /* CONFIG_CHECK_BEFORE_READING && ! CONFIG_SOC_LPC55S36 */
 
 struct flash_priv {
@@ -204,36 +207,54 @@ static int flash_mcux_read(const struct device *dev, off_t offset,
 	 */
 	addr = offset + priv->pflash_block_base;
 
-#ifdef CONFIG_CHECK_BEFORE_READING
-  #ifdef CONFIG_SOC_LPC55S36
-	/* Validates the given address range is loaded in the flash hiding region. */
-	rc = FLASH_IsFlashAreaReadable(&priv->config, addr, len);
-	if (rc != kStatus_FLASH_Success) {
-		rc = -EIO;
-	} else {
-		/* Check whether the flash is erased ("len" and "addr" must be word-aligned). */
-		rc = FLASH_VerifyErase(&priv->config, ((addr + 0x3) & ~0x3),  ((len + 0x3) & ~0x3));
-		if (rc == kStatus_FLASH_Success) {
-			rc = -ENODATA;
+	if (IS_ENABLED(CONFIG_CHECK_BEFORE_READING)) {
+		/*
+		 * Ensure the area is readable, since a direct access may cause faults on erased
+		 * or otherwise unreadable pages. Emulate erased pages, return other errors.
+		 */
+		if (IS_ENABLED(CONFIG_SOC_LPC55S36)) {
+			/* On LPC55S36, use a HAL function to safely copy from Flash. */
+			rc = FLASH_Read(&priv->config, addr, data, len);
+			switch (rc) {
+			case kStatus_FLASH_Success:
+				rc = 0;
+				break;
+			case kStatus_FLASH_EccError:
+				/* Check id the ECC issue is due to the Flash being erased
+				 * ("addr" and "len" must be word-aligned for this call).
+				 */
+				rc = FLASH_VerifyErase(&priv->config, ((addr + 0x3) & ~0x3),
+								      ((len + 0x3) & ~0x3));
+				if (rc == kStatus_FLASH_Success) {
+					rc = -ENODATA;
+				} else {
+					rc = -EIO;
+				}
+				break;
+			default:
+				rc = -EIO;
+				break;
+			}
 		} else {
+			/* On all other targets, check if the Flash area is readable.
+			 * If so, copy data from it directly.
+			 */
+			rc = is_area_readable(addr, len);
+			if (!rc) {
+				memcpy(data, (void *) addr, len);
+			}
+		}
+
+		if (rc == -ENODATA) {
+			/* Erased area, return dummy data as an erased page. */
+			memset(data, 0xFF, len);
 			rc = 0;
 		}
-	}
-  #else
-	rc = is_area_readable(addr, len);
-  #endif /* CONFIG_SOC_LPC55S36 */
-#endif /* CONFIG_CHECK_BEFORE_READING */
-
-	if (!rc) {
+	} else {
+		/* No safety checks, directly copy the memory mapped data. */
 		memcpy(data, (void *) addr, len);
 	}
-#ifdef CONFIG_CHECK_BEFORE_READING
-	else if (rc == -ENODATA) {
-		/* Erased area, return dummy data as an erased page. */
-		memset(data, 0xFF, len);
-		rc = 0;
-	}
-#endif
+
 	return rc;
 }
 
