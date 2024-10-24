@@ -467,6 +467,12 @@ Libraries / Subsystems
     * :kconfig:option:`CONFIG_MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED`
       for TLS 1.3 PSK ephemeral key exchange mode.
 
+  * The Kconfig symbol :kconfig:option:`CONFIG_MBEDTLS_PSA_STATIC_KEY_SLOTS` was
+    added to allow Mbed TLS to use pre-allocated static buffers to store key material
+    in its PSA Crypto core instead of heap allocated ones. This can help reducing
+    (or removing, if no other components makes use of it) heap memory requirements
+    from the final application.
+
 * CMSIS-NN
 
 * FPGA
