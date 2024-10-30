@@ -616,10 +616,8 @@ static int uart_mcux_lpuart_dma_replace_rx_buffer(const struct device *dev)
 	struct mcux_lpuart_data *data = (struct mcux_lpuart_data *)dev->data;
 	const struct mcux_lpuart_config *config = dev->config;
 	LPUART_Type *lpuart = config->base;
-	// struct mcux_lpuart_rx_dma_params *rx_dma_params = &data->async.rx_dma_params;
 
 	LOG_DBG("Replacing RX buffer, new length: %d", data->async.next_rx_buffer_len);
-
 	/* There must be a buffer to replace this one with */
 	assert(data->async.next_rx_buffer != NULL);
 	assert(data->async.next_rx_buffer_len != 0U);
@@ -677,8 +675,9 @@ static void dma_callback(const struct device *dma_dev, void *callback_arg, uint3
 		async_evt_rx_rdy(dev);
 		async_evt_rx_buf_release(dev);
 
-        /*Remember the buf so it can be released after it is done. Only when it is released in SG mode*/
-        rx_dma_params->buf = data->async.next_rx_buffer;
+		/*Remember the buf so it can be released after it is done.
+		Only when it is released in SG mode*/
+		rx_dma_params->buf = data->async.next_rx_buffer;
 		rx_dma_params->buf_len = data->async.next_rx_buffer_len;
 		data->async.next_rx_buffer = NULL;
 		data->async.next_rx_buffer_len = 0U;
@@ -865,7 +864,7 @@ static int mcux_lpuart_rx_buf_rsp(const struct device *dev, uint8_t *buf, size_t
 	assert(data->async.next_rx_buffer_len == 0);
 	data->async.next_rx_buffer = buf;
 	data->async.next_rx_buffer_len = len;
-    uart_mcux_lpuart_dma_replace_rx_buffer(dev);
+    	uart_mcux_lpuart_dma_replace_rx_buffer(dev);
 	irq_unlock(key);
 	return 0;
 }
@@ -1341,7 +1340,7 @@ static const struct uart_driver_api mcux_lpuart_driver_api = {
 				id, rx, source),					       \
 			.dma_callback = dma_callback,					       \
 			.user_data = (void *)DEVICE_DT_INST_GET(id),			       \
-            .cyclic = 1,                           \
+            		.cyclic = 1,                           				       \
 		},									       \
 	},
 #else
