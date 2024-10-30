@@ -738,8 +738,8 @@ out:
 
 	if (ldr->sect_hdrs_on_heap) {
 		llext_free(ldr->sect_hdrs);
+		ldr->sect_hdrs = NULL;
 	}
-	ldr->sect_hdrs = NULL;
 
 	/* Until proper inter-llext linking is implemented, the symbol table is
 	 * not useful outside of the loading process; keep it only if debugging
