@@ -553,8 +553,11 @@ MCUboot
 OSDP
 ****
 
-Trusted Firmware-M
-******************
+Trusted Firmware-M (TF-M)
+*************************
+
+* TF-M was updated to version 2.1.1 (from 2.1.0).
+  The release notes can be found at: https://tf-m-user-guide.trustedfirmware.org/releases/2.1.1.html
 
 LVGL
 ****
