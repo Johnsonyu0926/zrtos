@@ -29,6 +29,7 @@
 #include <zephyr/sys_clock.h>
 #include <zephyr/types.h>
 
+#include "bstests.h"
 #include "bs_types.h"
 #include "bs_tracing.h"
 
@@ -88,7 +89,7 @@ static const uint8_t mock_iso_data[] = {
 		(void)k_sleep(K_MSEC(1)); \
 	}
 
-
+extern enum bst_result_t bst_result;
 #define FAIL(...) \
 	do { \
 		bst_result = Failed; \
@@ -106,7 +107,7 @@ static const uint8_t mock_iso_data[] = {
 #define PA_SYNC_INTERVAL_TO_TIMEOUT_RATIO 20 /* Set the timeout relative to interval */
 #define PA_SYNC_SKIP         5
 
-#define PBP_STREAMS_TO_SEND  2
+#define PBP_STREAMS_TO_SEND 2
 
 extern struct bt_le_scan_cb common_scan_cb;
 extern const struct bt_data ad[AD_SIZE];
