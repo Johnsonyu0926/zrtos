@@ -649,6 +649,9 @@ endmenu
 # Architecture Capabilities
 #
 
+config ARCH_HAS_CUSTOM_CURRENT_IMPL
+	bool
+
 config ARCH_HAS_SINGLE_THREAD_SUPPORT
 	bool
 
