@@ -187,6 +187,9 @@ static struct bt_csip_set_coordinator_svc_inst *get_next_active_instance(void)
 	svc_inst =  lookup_instance_by_set_info(member, active.info);
 	if (svc_inst == NULL) {
 		LOG_DBG("Failed to lookup instance by set_info %p", active.info);
+	} else if (svc_inst->conn == NULL) {
+		LOG_DBG("Next service instance %p disconnected", svc_inst);
+		return NULL;
 	}
 
 	return svc_inst;
