@@ -279,6 +279,10 @@ static int pwm_led_esp32_set_cycles(const struct device *dev, uint32_t channel_i
 		return -EINVAL;
 	}
 
+	if (flags & PWM_POLARITY_INVERTED) {
+		pulse_cycles = period_cycles - pulse_cycles;
+	}
+
 	/* Update PWM frequency according to period_cycles */
 	ret = pwm_led_esp32_get_cycles_per_sec(dev, channel_idx, &clk_freq);
 	if (ret < 0) {
@@ -312,7 +316,7 @@ static int pwm_led_esp32_set_cycles(const struct device *dev, uint32_t channel_i
 
 	double duty_cycle = (double) pulse_cycles / (double) period_cycles;
 
-	channel->duty_val = (uint32_t)((double) (1 << channel->resolution) * duty_cycle);
+	channel->duty_val = (uint32_t)((double)((1 << channel->resolution) - 1) * duty_cycle);
 
 	pwm_led_esp32_duty_set(dev, channel);
 
