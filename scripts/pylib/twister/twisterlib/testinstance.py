@@ -20,7 +20,7 @@ from twisterlib.testsuite import TestCase, TestSuite
 from twisterlib.platform import Platform
 from twisterlib.error import BuildError, StatusAttributeError
 from twisterlib.size_calc import SizeCalculator
-from twisterlib.statuses import TwisterStatus
+from twisterlib.statuses import TwisterStatus, TwisterStatusMachine
 from twisterlib.handlers import (
     Handler,
     SimulationHandler,
@@ -60,6 +60,7 @@ class TestInstance:
         self.execution_time = 0
         self.build_time = 0
         self.retries = 0
+        self.instance_status_machine = TwisterStatusMachine()
 
         self.name = os.path.join(platform.name, testsuite.name)
         self.dut = None
@@ -99,16 +100,23 @@ class TestInstance:
 
     @property
     def status(self) -> TwisterStatus:
-        return self._status
+        if self._status != str(self.instance_status_machine.current_state):
+            logger.warning("exp {} but {}".format(self._status,
+                str(self.instance_status_machine.current_state)))
+        return str(self.instance_status_machine.current_state)
 
     @status.setter
     def status(self, value : TwisterStatus) -> None:
         # Check for illegal assignments by value
         try:
             key = value.name if isinstance(value, Enum) else value
+            logger.warning("_status deprecated, will remove in future release")
             self._status = TwisterStatus[key]
+            self.instance_status_machine.trigger(value)
         except KeyError:
             raise StatusAttributeError(self.__class__, value)
+        except TwisterStatusMachine.TransitionNotAllowed:
+            self.instance_status_machine.force_state(value)
 
     def add_filter(self, reason, filter_type):
         self.filters.append({'type': filter_type, 'reason': reason })
