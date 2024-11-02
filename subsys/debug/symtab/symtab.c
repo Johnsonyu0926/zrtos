@@ -10,16 +10,16 @@
 #include <zephyr/debug/symtab.h>
 #include <zephyr/shell/shell.h>
 
-const struct symtab_info *const symtab_get(void)
+const struct symtab_info *symtab_get(void)
 {
 	extern const struct symtab_info z_symtab;
 
 	return &z_symtab;
 }
 
-const char *const symtab_find_symbol_name(uintptr_t addr, uint32_t *offset)
+const char *symtab_find_symbol_name(uintptr_t addr, uint32_t *offset)
 {
-	const struct symtab_info *const symtab = symtab_get();
+	const struct symtab_info *symtab = symtab_get();
 	const uint32_t symbol_offset = addr - symtab->first_addr;
 	uint32_t left = 0, right = symtab->length;
 	uint32_t ret_offset = 0;
@@ -56,7 +56,7 @@ static int cmd_symtab_list(const struct shell *sh, size_t argc, char *argv[])
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	const struct symtab_info *const symtab = symtab_get();
+	const struct symtab_info *symtab = symtab_get();
 
 	for (uint32_t i = 0; i < symtab->length; i++) {
 		const struct z_symtab_entry *const entry = &symtab->entries[i];
