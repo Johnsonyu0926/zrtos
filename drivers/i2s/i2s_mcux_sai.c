@@ -299,7 +299,6 @@ static void i2s_dma_tx_callback(const struct device *dma_dev, void *arg, uint32_
 			strm->state = I2S_STATE_ERROR;
 			goto disabled_exit_no_drop;
 		}
-		dma_start(dev_data->dev_dma, strm->dma_channel);
 
 		if (blocks_queued || (strm->free_tx_dma_blocks < MAX_TX_DMA_BLOCKS)) {
 			goto enabled_exit;
@@ -389,7 +388,6 @@ static void i2s_dma_rx_callback(const struct device *dma_dev, void *arg, uint32_
 						ret);
 				}
 
-				dma_start(dev_data->dev_dma, strm->dma_channel);
 			}
 		} else {
 			i2s_rx_stream_disable(dev, true, false);
