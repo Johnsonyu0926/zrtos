@@ -1530,6 +1530,12 @@ uint8_t ll_adv_enable(uint8_t enable)
 #if !defined(CONFIG_BT_CTLR_JIT_SCHEDULING)
 		ll_adv_ticker_ext[handle].ticks_slot_window =
 			ULL_ADV_RANDOM_DELAY + ticks_slot;
+
+#if defined(CONFIG_BT_TICKER_EXT_SLOT_WINDOW_YIELD)
+		ll_adv_ticker_ext[handle].ticks_slot_window +=
+			HAL_TICKER_US_TO_TICKS((uint64_t)interval *
+					       ADV_INT_UNIT_US);
+#endif /* CONFIG_BT_TICKER_EXT_SLOT_WINDOW_YIELD */
 #endif /* !CONFIG_BT_CTLR_JIT_SCHEDULING */
 
 #if defined(CONFIG_BT_TICKER_EXT_EXPIRE_INFO)
