@@ -867,6 +867,15 @@ ZTEST(util, test_utf8_lcpy_truncated)
 	zassert_str_equal(dest_str, expected_result, "Failed to copy");
 }
 
+ZTEST(util, test_utf8_check)
+{
+	char s1[] = "€€€";
+	char s2[] = "\xe2";
+
+	zassert_true(utf8_is_valid(s1, strlen(s1)), "Failed to check");
+	zassert_false(utf8_is_valid(s2, strlen(s2)), "Failed to check");
+}
+
 ZTEST(util, test_utf8_lcpy_not_truncated)
 {
 	/* dest_str size is based on storing 3 * € plus the null terminator  */
