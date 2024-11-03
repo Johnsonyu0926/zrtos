@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <zephyr/sys/__assert.h>
+#include <zephyr/sys/util.h>
 
 #define ASCII_CHAR 0x7F
 #define SEQUENCE_FIRST_MASK 0xC0
@@ -78,4 +79,38 @@ char *utf8_lcpy(char *dst, const char *src, size_t n)
 	}
 
 	return dst;
+}
+
+bool utf8_is_valid(const char *str, size_t maxlen)
+{
+	int i = 0, nbyte = 0;
+	size_t len = strlen(str);
+	unsigned char *buf = (unsigned char *)str;
+
+	/* Return false when the string is greater than the maximum length. */
+	if (len > maxlen) {
+		return false;
+	}
+
+	while (i < len) {
+		if (buf[i] <= 0x7F && buf[i] >= 0x00) {
+			i++;
+			continue;
+		} else {
+			if (buf[i] <= 0xDF && buf[i] >= 0xC2) {
+				nbyte = 2;
+			} else if (buf[i] <= 0xEF && buf[i] >= 0xE0) {
+				nbyte = 3;
+			} else if (buf[i] <= 0xF4 && buf[i] >= 0xF0) {
+				nbyte = 4;
+			} else {
+				return false;
+			}
+		}
+		if (i + nbyte > len) {
+			return false;
+		}
+		i += nbyte;
+	}
+	return true;
 }
